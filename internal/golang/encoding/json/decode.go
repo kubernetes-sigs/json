@@ -188,7 +188,13 @@ func (d *decodeState) unmarshal(v interface{}) error {
 	if err != nil {
 		return d.addErrorContext(err)
 	}
-	return d.savedError
+	if d.savedError != nil {
+		return d.savedError
+	}
+	if len(d.savedStrictErrors) > 0 {
+		return &UnmarshalStrictError{Errors: d.savedStrictErrors}
+	}
+	return nil
 }
 
 /*
@@ -225,6 +231,9 @@ type decodeState struct {
 	savedError            error
 	useNumber             bool
 	disallowUnknownFields bool
+
+	savedStrictErrors []error
+	seenStrictErrors  map[string]struct{}
 }
 
 // readIndex returns the position of the last byte read.
@@ -753,7 +762,7 @@ func (d *decodeState) object(v reflect.Value) error {
 				d.errorContext.FieldStack = append(d.errorContext.FieldStack, f.name)
 				d.errorContext.Struct = t
 			} else if d.disallowUnknownFields {
-				d.saveError(fmt.Errorf("json: unknown field %q", key))
+				d.saveStrictError(fmt.Errorf("unknown field %q", key))
 			}
 		}
 

@@ -19,6 +19,7 @@ package json
 import (
 	gojson "encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -88,6 +89,79 @@ func TestUnmarshalWithOptions(t *testing.T) {
 			if !reflect.DeepEqual(tc.expect, tc.to) {
 				t.Fatalf("expected\n%#v\ngot\n%#v", tc.expect, tc.to)
 			}
+		})
+	}
+}
+
+func TestStrictErrors(t *testing.T) {
+	type Typed struct {
+		A int `json:"a"`
+	}
+
+	testcases := []struct {
+		name            string
+		in              string
+		expectStrictErr bool
+		expectErr       string
+	}{
+		{
+			name:            "malformed 1",
+			in:              `{`,
+			expectStrictErr: false,
+		},
+		{
+			name:            "malformed 2",
+			in:              `{}}`,
+			expectStrictErr: false,
+		},
+		{
+			name:            "malformed 3",
+			in:              `{,}`,
+			expectStrictErr: false,
+		},
+		{
+			name:            "type error",
+			in:              `{"a":true}`,
+			expectStrictErr: false,
+		},
+		{
+			name:            "unknown",
+			in:              `{"a":1,"unknown":true,"unknown":false}`,
+			expectStrictErr: true,
+			expectErr:       `json: unknown field "unknown"`,
+		},
+		{
+			name:            "unknowns",
+			in:              `{"a":1,"unknown":true,"unknown2":true,"unknown":true,"unknown2":true}`,
+			expectStrictErr: true,
+			expectErr:       `json: unknown field "unknown", unknown field "unknown2"`,
+		},
+		{
+			name:            "unknowns and type error",
+			in:              `{"unknown":true,"a":true}`,
+			expectStrictErr: false,
+		},
+		{
+			name:            "unknowns and malformed error",
+			in:              `{"unknown":true}}`,
+			expectStrictErr: false,
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := Unmarshal([]byte(tc.in), &Typed{}, DisallowUnknownFields)
+			if err == nil {
+				t.Fatal("expected error, got none")
+			}
+			_, isStrictErr := err.(*UnmarshalStrictError)
+			if tc.expectStrictErr != isStrictErr {
+				t.Fatalf("expected strictErr=%v, got %v: %v", tc.expectStrictErr, isStrictErr, err)
+			}
+			if !strings.Contains(err.Error(), tc.expectErr) {
+				t.Fatalf("expected error containing %q, got %q", tc.expectErr, err)
+			}
+			t.Log(err)
 		})
 	}
 }

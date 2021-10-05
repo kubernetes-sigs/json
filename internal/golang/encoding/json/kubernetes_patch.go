@@ -16,7 +16,10 @@ limitations under the License.
 
 package json
 
-import gojson "encoding/json"
+import (
+	gojson "encoding/json"
+	"strings"
+)
 
 // Type-alias error and data types returned from decoding
 
@@ -35,4 +38,43 @@ func UseNumber(d *decodeState) {
 }
 func DisallowUnknownFields(d *decodeState) {
 	d.disallowUnknownFields = true
+}
+
+// saveStrictError saves a strict decoding error,
+// for reporting at the end of the unmarshal if no other errors occurred.
+func (d *decodeState) saveStrictError(err error) {
+	// prevent excessive numbers of accumulated errors
+	if len(d.savedStrictErrors) >= 100 {
+		return
+	}
+	// dedupe accumulated strict errors
+	if d.seenStrictErrors == nil {
+		d.seenStrictErrors = map[string]struct{}{}
+	}
+	msg := err.Error()
+	if _, seen := d.seenStrictErrors[msg]; seen {
+		return
+	}
+
+	// accumulate the error
+	d.seenStrictErrors[msg] = struct{}{}
+	d.savedStrictErrors = append(d.savedStrictErrors, err)
+}
+
+// UnmarshalStrictError holds errors resulting from use of strict disallow___ decoder directives.
+// If this is returned from Unmarshal(), it means the decoding was successful in all other respects.
+type UnmarshalStrictError struct {
+	Errors []error
+}
+
+func (e *UnmarshalStrictError) Error() string {
+	var b strings.Builder
+	b.WriteString("json: ")
+	for i, err := range e.Errors {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		b.WriteString(err.Error())
+	}
+	return b.String()
 }
