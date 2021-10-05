@@ -119,6 +119,7 @@ type Unmarshaler interface {
 	UnmarshalJSON([]byte) error
 }
 
+/*
 // An UnmarshalTypeError describes a JSON value that was
 // not appropriate for a value of a specific Go type.
 type UnmarshalTypeError struct {
@@ -166,6 +167,7 @@ func (e *InvalidUnmarshalError) Error() string {
 	}
 	return "json: Unmarshal(nil " + e.Type.String() + ")"
 }
+*/
 
 func (d *decodeState) unmarshal(v interface{}) error {
 	rv := reflect.ValueOf(v)
@@ -184,6 +186,7 @@ func (d *decodeState) unmarshal(v interface{}) error {
 	return d.savedError
 }
 
+/*
 // A Number represents a JSON number literal.
 type Number string
 
@@ -199,6 +202,7 @@ func (n Number) Float64() (float64, error) {
 func (n Number) Int64() (int64, error) {
 	return strconv.ParseInt(string(n), 10, 64)
 }
+*/
 
 // An errorContext provides context for type errors during decoding.
 type errorContext struct {
