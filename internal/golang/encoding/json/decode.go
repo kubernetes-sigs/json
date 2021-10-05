@@ -234,6 +234,8 @@ type decodeState struct {
 
 	savedStrictErrors []error
 	seenStrictErrors  map[string]struct{}
+
+	caseSensitive bool
 }
 
 // readIndex returns the position of the last byte read.
@@ -720,7 +722,7 @@ func (d *decodeState) object(v reflect.Value) error {
 			if i, ok := fields.nameIndex[string(key)]; ok {
 				// Found an exact name match.
 				f = &fields.list[i]
-			} else {
+			} else if !d.caseSensitive {
 				// Fall back to the expensive case-insensitive
 				// linear search.
 				for i := range fields.list {

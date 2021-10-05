@@ -40,6 +40,15 @@ func DisallowUnknownFields(d *decodeState) {
 	d.disallowUnknownFields = true
 }
 
+// CaseSensitive requires json keys to exactly match specified json tags (for tagged struct fields)
+// or struct field names (for untagged struct fields), or be treated as an unknown field.
+func CaseSensitive(d *decodeState) {
+	d.caseSensitive = true
+}
+func (d *Decoder) CaseSensitive() {
+	d.d.caseSensitive = true
+}
+
 // saveStrictError saves a strict decoding error,
 // for reporting at the end of the unmarshal if no other errors occurred.
 func (d *decodeState) saveStrictError(err error) {

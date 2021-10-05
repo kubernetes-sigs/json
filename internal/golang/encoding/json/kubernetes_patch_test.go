@@ -165,3 +165,100 @@ func TestStrictErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestCaseSensitive(t *testing.T) {
+	type Embedded1 struct {
+		C int `json:"c"`
+		D int
+	}
+	type Embedded2 struct {
+		E int `json:"e"`
+		F int
+	}
+
+	type Obj struct {
+		A         int `json:"a"`
+		B         int
+		Embedded1 `json:",inline"`
+		Embedded2
+	}
+
+	testcases := []struct {
+		name   string
+		in     string
+		to     interface{}
+		expect interface{}
+	}{
+		{
+			name:   "tagged",
+			in:     `{"A":"1","A":2,"a":3,"A":4,"A":"5"}`,
+			to:     &Obj{},
+			expect: &Obj{A: 3},
+		},
+		{
+			name:   "untagged",
+			in:     `{"b":"1","b":2,"B":3,"b":4,"b":"5"}`,
+			to:     &Obj{},
+			expect: &Obj{B: 3},
+		},
+		{
+			name:   "inline embedded tagged subfield",
+			in:     `{"C":"1","C":2,"c":3,"C":4,"C":"5"}`,
+			to:     &Obj{},
+			expect: &Obj{Embedded1: Embedded1{C: 3}},
+		},
+		{
+			name:   "inline embedded untagged subfield",
+			in:     `{"d":"1","d":2,"D":3,"d":4,"d":"5"}`,
+			to:     &Obj{},
+			expect: &Obj{Embedded1: Embedded1{D: 3}},
+		},
+		{
+			name:   "inline embedded field name",
+			in:     `{"Embedded1":{"c":3}}`,
+			to:     &Obj{},
+			expect: &Obj{}, // inlined embedded is not addressable by field name
+		},
+		{
+			name:   "inline embedded empty name",
+			in:     `{"":{"c":3}}`,
+			to:     &Obj{},
+			expect: &Obj{}, // inlined embedded is not addressable by empty json field name
+		},
+		{
+			name:   "untagged embedded tagged subfield",
+			in:     `{"E":"1","E":2,"e":3,"E":4,"E":"5"}`,
+			to:     &Obj{},
+			expect: &Obj{Embedded2: Embedded2{E: 3}},
+		},
+		{
+			name:   "untagged embedded untagged subfield",
+			in:     `{"f":"1","f":2,"F":3,"f":4,"f":"5"}`,
+			to:     &Obj{},
+			expect: &Obj{Embedded2: Embedded2{F: 3}},
+		},
+		{
+			name:   "untagged embedded field name",
+			in:     `{"Embedded2":{"e":3}}`,
+			to:     &Obj{},
+			expect: &Obj{}, // untagged embedded is not addressable by field name
+		},
+		{
+			name:   "untagged embedded empty name",
+			in:     `{"":{"e":3}}`,
+			to:     &Obj{},
+			expect: &Obj{}, // untagged embedded is not addressable by empty json field name
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := Unmarshal([]byte(tc.in), &tc.to, CaseSensitive); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(tc.expect, tc.to) {
+				t.Fatalf("expected\n%#v\ngot\n%#v", tc.expect, tc.to)
+			}
+		})
+	}
+}
