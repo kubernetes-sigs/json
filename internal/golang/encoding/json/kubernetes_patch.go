@@ -49,6 +49,18 @@ func (d *Decoder) CaseSensitive() {
 	d.d.caseSensitive = true
 }
 
+// PreserveInts decodes numbers as int64 when decoding to untyped fields,
+// if the JSON data does not contain a "." character, parses as an integer successfully,
+// and does not overflow int64. Otherwise, it falls back to default float64 decoding behavior.
+//
+// If UseNumber is also set, it takes precedence over PreserveInts.
+func PreserveInts(d *decodeState) {
+	d.preserveInts = true
+}
+func (d *Decoder) PreserveInts() {
+	d.d.preserveInts = true
+}
+
 // saveStrictError saves a strict decoding error,
 // for reporting at the end of the unmarshal if no other errors occurred.
 func (d *decodeState) saveStrictError(err error) {
