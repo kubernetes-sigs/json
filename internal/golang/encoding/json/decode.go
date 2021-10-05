@@ -238,6 +238,8 @@ type decodeState struct {
 	caseSensitive bool
 
 	preserveInts bool
+
+	disallowDuplicateFields bool
 }
 
 // readIndex returns the position of the last byte read.
@@ -649,6 +651,7 @@ func (d *decodeState) object(v reflect.Value) error {
 	}
 
 	var fields structFields
+	var checkDuplicateField func(fieldNameIndex int, fieldName string)
 
 	// Check type of target:
 	//   struct or
@@ -672,8 +675,51 @@ func (d *decodeState) object(v reflect.Value) error {
 		if v.IsNil() {
 			v.Set(reflect.MakeMap(t))
 		}
+
+		if d.disallowDuplicateFields {
+			var seenKeys map[string]struct{}
+			checkDuplicateField = func(fieldNameIndex int, fieldName string) {
+				if seenKeys == nil {
+					seenKeys = map[string]struct{}{}
+				}
+				if _, seen := seenKeys[fieldName]; seen {
+					d.saveStrictError(fmt.Errorf("duplicate field %q", fieldName))
+				} else {
+					seenKeys[fieldName] = struct{}{}
+				}
+			}
+		}
+
 	case reflect.Struct:
 		fields = cachedTypeFields(t)
+
+		if d.disallowDuplicateFields {
+			if len(fields.list) <= 64 {
+				// bitset by field index for structs with <= 64 fields
+				var seenKeys uint64
+				checkDuplicateField = func(fieldNameIndex int, fieldName string) {
+					if seenKeys&(1<<fieldNameIndex) != 0 {
+						d.saveStrictError(fmt.Errorf("duplicate field %q", fieldName))
+					} else {
+						seenKeys = seenKeys | (1 << fieldNameIndex)
+					}
+				}
+			} else {
+				// list of seen field indices for structs with greater than 64 fields
+				var seenIndexes []bool
+				checkDuplicateField = func(fieldNameIndex int, fieldName string) {
+					if seenIndexes == nil {
+						seenIndexes = make([]bool, len(fields.list))
+					}
+					if seenIndexes[fieldNameIndex] {
+						d.saveStrictError(fmt.Errorf("duplicate field %q", fieldName))
+					} else {
+						seenIndexes[fieldNameIndex] = true
+					}
+				}
+			}
+		}
+
 		// ok
 	default:
 		d.saveError(&UnmarshalTypeError{Value: "object", Type: t, Offset: int64(d.off)})
@@ -719,11 +765,17 @@ func (d *decodeState) object(v reflect.Value) error {
 				mapElem.Set(reflect.Zero(elemType))
 			}
 			subv = mapElem
+			if checkDuplicateField != nil {
+				checkDuplicateField(0, string(key))
+			}
 		} else {
 			var f *field
 			if i, ok := fields.nameIndex[string(key)]; ok {
 				// Found an exact name match.
 				f = &fields.list[i]
+				if checkDuplicateField != nil {
+					checkDuplicateField(i, f.name)
+				}
 			} else if !d.caseSensitive {
 				// Fall back to the expensive case-insensitive
 				// linear search.
@@ -731,6 +783,9 @@ func (d *decodeState) object(v reflect.Value) error {
 					ff := &fields.list[i]
 					if ff.equalFold(ff.nameBytes, key) {
 						f = ff
+						if checkDuplicateField != nil {
+							checkDuplicateField(i, f.name)
+						}
 						break
 					}
 				}
@@ -1141,6 +1196,12 @@ func (d *decodeState) objectInterface() map[string]interface{} {
 			panic(phasePanicMsg)
 		}
 		d.scanWhile(scanSkipSpace)
+
+		if d.disallowDuplicateFields {
+			if _, exists := m[key]; exists {
+				d.saveStrictError(fmt.Errorf("duplicate field %q", key))
+			}
+		}
 
 		// Read value.
 		m[key] = d.valueInterface()

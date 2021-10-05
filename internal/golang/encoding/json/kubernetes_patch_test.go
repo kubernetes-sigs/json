@@ -567,3 +567,196 @@ func TestPreserveInts(t *testing.T) {
 		t.Fatalf("expected\n\t%#v, got\n\t%#v", e, a)
 	}
 }
+
+func TestDisallowDuplicateFields(t *testing.T) {
+	type MixedObj struct {
+		A int `json:"a"`
+		B int `json:"b"`
+		C int
+		D map[string]string
+	}
+	type SmallObj struct {
+		F01 int
+		F02 int
+		F03 int
+		F04 int
+		F05 int
+		F06 int
+		F07 int
+		F08 int
+		F09 int
+		F10 int
+		F11 int
+		F12 int
+		F13 int
+		F14 int
+		F15 int
+		F16 int
+		F17 int
+		F18 int
+		F19 int
+		F20 int
+		F21 int
+		F22 int
+		F23 int
+		F24 int
+		F25 int
+		F26 int
+		F27 int
+		F28 int
+		F29 int
+		F30 int
+		F31 int
+		F32 int
+		F33 int
+		F34 int
+		F35 int
+		F36 int
+		F37 int
+		F38 int
+		F39 int
+		F40 int
+		F41 int
+		F42 int
+		F43 int
+		F44 int
+		F45 int
+		F46 int
+		F47 int
+		F48 int
+		F49 int
+		F50 int
+		F51 int
+		F52 int
+		F53 int
+		F54 int
+		F55 int
+		F56 int
+		F57 int
+		F58 int
+		F59 int
+		F60 int
+		F61 int
+		F62 int
+		F63 int
+		F64 int
+	}
+
+	type BigObj struct {
+		F01 int
+		F02 int
+		F03 int
+		F04 int
+		F05 int
+		F06 int
+		F07 int
+		F08 int
+		F09 int
+		F10 int
+		F11 int
+		F12 int
+		F13 int
+		F14 int
+		F15 int
+		F16 int
+		F17 int
+		F18 int
+		F19 int
+		F20 int
+		F21 int
+		F22 int
+		F23 int
+		F24 int
+		F25 int
+		F26 int
+		F27 int
+		F28 int
+		F29 int
+		F30 int
+		F31 int
+		F32 int
+		F33 int
+		F34 int
+		F35 int
+		F36 int
+		F37 int
+		F38 int
+		F39 int
+		F40 int
+		F41 int
+		F42 int
+		F43 int
+		F44 int
+		F45 int
+		F46 int
+		F47 int
+		F48 int
+		F49 int
+		F50 int
+		F51 int
+		F52 int
+		F53 int
+		F54 int
+		F55 int
+		F56 int
+		F57 int
+		F58 int
+		F59 int
+		F60 int
+		F61 int
+		F62 int
+		F63 int
+		F64 int
+		F65 int
+	}
+
+	testcases := []struct {
+		name      string
+		in        string
+		to        interface{}
+		expectErr string
+	}{
+		{
+			name:      "duplicate typed",
+			in:        `{"a":1,"a":2,"a":3,"b":4,"b":5,"b":6,"C":7,"C":8,"C":9}`,
+			to:        &MixedObj{},
+			expectErr: `json: duplicate field "a", duplicate field "b", duplicate field "C"`,
+		},
+		{
+			name:      "duplicate typed map field",
+			in:        `{"d":{"a":"","b":"","c":"","a":"","b":"","c":""}}`,
+			to:        &MixedObj{},
+			expectErr: `json: duplicate field "a", duplicate field "b", duplicate field "c"`,
+		},
+		{
+			name:      "duplicate untyped map",
+			in:        `{"a":"","b":"","a":"","b":"","c":{"c":"","c":""}}`,
+			to:        &map[string]interface{}{},
+			expectErr: `json: duplicate field "a", duplicate field "b", duplicate field "c"`,
+		},
+		{
+			name:      "small obj",
+			in:        `{"f01":1,"f01":2,"f32":1,"f32":2,"f64":1,"f64":2}`,
+			to:        &SmallObj{},
+			expectErr: `json: duplicate field "F01", duplicate field "F32", duplicate field "F64"`,
+		},
+		{
+			name:      "big obj",
+			in:        `{"f01":1,"f01":2,"f32":1,"f32":2,"f64":1,"f64":2,"f65":1,"f65":2}`,
+			to:        &BigObj{},
+			expectErr: `json: duplicate field "F01", duplicate field "F32", duplicate field "F64", duplicate field "F65"`,
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := Unmarshal([]byte(tc.in), &tc.to, DisallowDuplicateFields)
+			if (len(tc.expectErr) > 0) != (err != nil) {
+				t.Fatalf("expected err=%v, got %v", len(tc.expectErr) > 0, err)
+			}
+			if len(tc.expectErr) > 0 && !strings.Contains(err.Error(), tc.expectErr) {
+				t.Fatalf("expected err containing '%s', got %v", tc.expectErr, err)
+			}
+		})
+	}
+}

@@ -61,6 +61,14 @@ func (d *Decoder) PreserveInts() {
 	d.d.preserveInts = true
 }
 
+// DisallowDuplicateFields treats duplicate fields encountered while decoding as an error.
+func DisallowDuplicateFields(d *decodeState) {
+	d.disallowDuplicateFields = true
+}
+func (d *Decoder) DisallowDuplicateFields() {
+	d.d.disallowDuplicateFields = true
+}
+
 // saveStrictError saves a strict decoding error,
 // for reporting at the end of the unmarshal if no other errors occurred.
 func (d *decodeState) saveStrictError(err error) {
