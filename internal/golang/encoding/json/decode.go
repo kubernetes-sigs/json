@@ -93,11 +93,16 @@ import (
 // Instead, they are replaced by the Unicode replacement
 // character U+FFFD.
 //
-func Unmarshal(data []byte, v interface{}) error {
+func Unmarshal(data []byte, v interface{}, opts ...UnmarshalOpt) error {
 	// Check for well-formedness.
 	// Avoids filling out half a data structure
 	// before discovering a JSON syntax error.
 	var d decodeState
+
+	for _, opt := range opts {
+		opt(&d)
+	}
+
 	err := checkValid(data, &d.scan)
 	if err != nil {
 		return err

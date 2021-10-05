@@ -27,3 +27,12 @@ type Number = gojson.Number
 type RawMessage = gojson.RawMessage
 type Token = gojson.Token
 type Delim = gojson.Delim
+
+type UnmarshalOpt func(*decodeState)
+
+func UseNumber(d *decodeState) {
+	d.useNumber = true
+}
+func DisallowUnknownFields(d *decodeState) {
+	d.disallowUnknownFields = true
+}
