@@ -16,7 +16,7 @@ Any code that is added must:
 * Be backward compatible with the existing exposed go API
 * Have zero external dependencies
 * Preserve existing benchmark performance
-* Preserve compatibility with existing decoding behavior of `Unmarshal()` or `UnmarshalStrict()`
+* Preserve compatibility with existing decoding behavior of `UnmarshalCaseSensitivePreserveInts()` or `UnmarshalStrict()`
 * Avoid use of `unsafe`
 
 ## Getting Started
