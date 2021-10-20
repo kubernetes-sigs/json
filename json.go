@@ -31,6 +31,7 @@ type Decoder interface {
 	Token() (gojson.Token, error)
 	More() bool
 	InputOffset() int64
+	CaseSensitive()
 }
 
 // NewDecoderCaseSensitivePreserveInts returns a decoder that matches the behavior of encoding/json#NewDecoder, with the following changes:
