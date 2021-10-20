@@ -9,7 +9,7 @@ It provides case-sensitive, integer-preserving JSON unmarshaling functions based
 
 ## Compatibility
 
-The `Unmarshal()` function behaves like `encoding/json#Unmarshal()` with the following differences:
+The `UnmarshalCaseSensitivePreserveInts()` function behaves like `encoding/json#Unmarshal()` with the following differences:
 
 - JSON object keys are treated case-sensitively.
   Object keys must exactly match json tag names (for tagged struct fields)
@@ -21,7 +21,7 @@ The `Unmarshal()` function behaves like `encoding/json#Unmarshal()` with the fol
 
 ## Additional capabilities
 
-The `UnmarshalStrict()` function decodes identically to `Unmarshal()`,
+The `UnmarshalStrict()` function decodes identically to `UnmarshalCaseSensitivePreserveInts()`,
 and also returns non-fatal strict errors encountered while decoding:
 
 - Duplicate fields encountered
