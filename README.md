@@ -1,25 +1,36 @@
-# Kubernetes Template Project
+# sigs.k8s.io/json
 
-The Kubernetes Template Project is a template for starting new projects in the GitHub organizations owned by Kubernetes. All Kubernetes projects, at minimum, must have the following files:
+[![Go Reference](https://pkg.go.dev/badge/sigs.k8s.io/json.svg)](https://pkg.go.dev/sigs.k8s.io/json)
 
-- a `README.md` outlining the project goals, sponsoring sig, and community contact information
-- an `OWNERS` with the project leads listed as approvers ([docs on `OWNERS` files][owners])
-- a `CONTRIBUTING.md` outlining how to contribute to the project
-- an unmodified copy of `code-of-conduct.md` from this repo, which outlines community behavior and the consequences of breaking the code
-- a `LICENSE` which must be Apache 2.0 for code projects, or [Creative Commons 4.0] for documentation repositories, without any custom content
-- a `SECURITY_CONTACTS` with the contact points for the Product Security Team 
-  to reach out to for triaging and handling of incoming issues. They must agree to abide by the
-  [Embargo Policy](https://git.k8s.io/security/private-distributors-list.md#embargo-policy)
-  and will be removed and replaced if they violate that agreement.
+## Introduction
 
-## Community, discussion, contribution, and support
+This library is a subproject of [sig-api-machinery](https://github.com/kubernetes/community/tree/master/sig-api-machinery#json).
+It provides case-sensitive, integer-preserving JSON unmarshaling functions based on `encoding/json` `Unmarshal()`.
 
-Learn how to engage with the Kubernetes community on the [community page](http://kubernetes.io/community/).
+## Compatibility
 
-You can reach the maintainers of this project at:
+The `Unmarshal()` function behaves like `encoding/json#Unmarshal()` with the following differences:
 
-- [Slack](http://slack.k8s.io/)
-- [Mailing List](https://groups.google.com/forum/#!forum/kubernetes-dev)
+- JSON object keys are treated case-sensitively.
+  Object keys must exactly match json tag names (for tagged struct fields)
+  or struct field names (for untagged struct fields).
+- JSON integers are unmarshaled into `interface{}` fields as an `int64` instead of a 
+  `float64` when possible, falling back to `float64` on any parse or overflow error.
+- Syntax errors do not return an `encoding/json` `*SyntaxError` error.
+  Instead, they return an error which can be passed to `SyntaxErrorOffset()` to obtain an offset.
+
+## Additional capabilities
+
+The `UnmarshalStrict()` function decodes identically to `Unmarshal()`,
+and also returns non-fatal strict errors encountered while decoding:
+
+- Duplicate fields encountered
+- Unknown fields encountered
+
+### Community, discussion, contribution, and support
+
+You can reach the maintainers of this project via the 
+[sig-api-machinery mailing list / channels](https://github.com/kubernetes/community/tree/master/sig-api-machinery#contact).
 
 ### Code of conduct
 
