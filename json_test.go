@@ -103,8 +103,8 @@ func TestUnmarshal(t *testing.T) {
 			name:             "duplicate map field",
 			in:               `{"c":{"a":"1","a":"2","b":"1","b":"2"}}`,
 			to:               func() interface{} { return &Obj{} },
-			expect:           &Obj{C: map[string]string{"a": "2", "b": "2"}},         // last duplicates win
-			expectStrictErrs: []string{`duplicate field "a"`, `duplicate field "b"`}, // multiple strict errors are returned
+			expect:           &Obj{C: map[string]string{"a": "2", "b": "2"}},             // last duplicates win
+			expectStrictErrs: []string{`duplicate field "c.a"`, `duplicate field "c.b"`}, // multiple strict errors are returned
 		},
 		{
 			name:             "unknown fields",
