@@ -97,8 +97,12 @@ func TestUnmarshalWithOptions(t *testing.T) {
 }
 
 func TestStrictErrors(t *testing.T) {
+	type SubType struct {
+	}
 	type Typed struct {
-		A int `json:"a"`
+		A int                `json:"a"`
+		B map[string]SubType `json:"b"`
+		C []SubType          `json:"c"`
 	}
 
 	testcases := []struct {
@@ -111,21 +115,25 @@ func TestStrictErrors(t *testing.T) {
 			name:            "malformed 1",
 			in:              `{`,
 			expectStrictErr: false,
+			expectErr:       `unexpected end of JSON input`,
 		},
 		{
 			name:            "malformed 2",
 			in:              `{}}`,
 			expectStrictErr: false,
+			expectErr:       `invalid character '}' after top-level value`,
 		},
 		{
 			name:            "malformed 3",
 			in:              `{,}`,
 			expectStrictErr: false,
+			expectErr:       `invalid character ',' looking for beginning of object key string`,
 		},
 		{
 			name:            "type error",
 			in:              `{"a":true}`,
 			expectStrictErr: false,
+			expectErr:       `json: cannot unmarshal bool into Go struct field Typed.a of type int`,
 		},
 		{
 			name:            "unknown",
@@ -140,14 +148,22 @@ func TestStrictErrors(t *testing.T) {
 			expectErr:       `json: unknown field "unknown", unknown field "unknown2"`,
 		},
 		{
+			name:            "nested unknowns",
+			in:              `{"a":1,"unknown":true,"unknown2":true,"unknown":true,"unknown2":true,"b":{"a":{"unknown":true}},"c":[{"unknown":true},{"unknown":true}]}`,
+			expectStrictErr: true,
+			expectErr:       `json: unknown field "unknown", unknown field "unknown2", unknown field "b.a.unknown", unknown field "c[0].unknown", unknown field "c[1].unknown"`,
+		},
+		{
 			name:            "unknowns and type error",
 			in:              `{"unknown":true,"a":true}`,
 			expectStrictErr: false,
+			expectErr:       `json: cannot unmarshal bool into Go struct field Typed.a of type int`,
 		},
 		{
 			name:            "unknowns and malformed error",
 			in:              `{"unknown":true}}`,
 			expectStrictErr: false,
+			expectErr:       `invalid character '}' after top-level value`,
 		},
 	}
 
@@ -161,8 +177,8 @@ func TestStrictErrors(t *testing.T) {
 			if tc.expectStrictErr != isStrictErr {
 				t.Fatalf("expected strictErr=%v, got %v: %v", tc.expectStrictErr, isStrictErr, err)
 			}
-			if !strings.Contains(err.Error(), tc.expectErr) {
-				t.Fatalf("expected error containing %q, got %q", tc.expectErr, err)
+			if err.Error() != tc.expectErr {
+				t.Fatalf("expected error\n%s\n%s", tc.expectErr, err)
 			}
 			t.Log(err)
 		})
@@ -569,11 +585,16 @@ func TestPreserveInts(t *testing.T) {
 }
 
 func TestDisallowDuplicateFields(t *testing.T) {
+	type SubType struct {
+		F int `json:"f"`
+		G int `json:"g"`
+	}
 	type MixedObj struct {
 		A int `json:"a"`
 		B int `json:"b"`
 		C int
-		D map[string]string
+		D map[string]string `json:"d"`
+		E []SubType         `json:"e"`
 	}
 	type SmallObj struct {
 		F01 int
@@ -718,21 +739,21 @@ func TestDisallowDuplicateFields(t *testing.T) {
 	}{
 		{
 			name:      "duplicate typed",
-			in:        `{"a":1,"a":2,"a":3,"b":4,"b":5,"b":6,"C":7,"C":8,"C":9}`,
+			in:        `{"a":1,"a":2,"a":3,"b":4,"b":5,"b":6,"C":7,"C":8,"C":9,"e":[{"f":1,"f":1}]}`,
 			to:        &MixedObj{},
-			expectErr: `json: duplicate field "a", duplicate field "b", duplicate field "C"`,
+			expectErr: `json: duplicate field "a", duplicate field "b", duplicate field "C", duplicate field "e[0].f"`,
 		},
 		{
 			name:      "duplicate typed map field",
 			in:        `{"d":{"a":"","b":"","c":"","a":"","b":"","c":""}}`,
 			to:        &MixedObj{},
-			expectErr: `json: duplicate field "a", duplicate field "b", duplicate field "c"`,
+			expectErr: `json: duplicate field "d.a", duplicate field "d.b", duplicate field "d.c"`,
 		},
 		{
 			name:      "duplicate untyped map",
-			in:        `{"a":"","b":"","a":"","b":"","c":{"c":"","c":""}}`,
+			in:        `{"a":"","b":"","a":"","b":"","c":{"c":"","c":""},"d":{"e":{"f":1,"f":1}},"e":[{"g":1,"g":1}]}`,
 			to:        &map[string]interface{}{},
-			expectErr: `json: duplicate field "a", duplicate field "b", duplicate field "c"`,
+			expectErr: `json: duplicate field "a", duplicate field "b", duplicate field "c.c", duplicate field "d.e.f", duplicate field "e[0].g"`,
 		},
 		{
 			name:      "small obj",
@@ -754,8 +775,11 @@ func TestDisallowDuplicateFields(t *testing.T) {
 			if (len(tc.expectErr) > 0) != (err != nil) {
 				t.Fatalf("expected err=%v, got %v", len(tc.expectErr) > 0, err)
 			}
-			if len(tc.expectErr) > 0 && !strings.Contains(err.Error(), tc.expectErr) {
-				t.Fatalf("expected err containing '%s', got %v", tc.expectErr, err)
+			if err == nil {
+				return
+			}
+			if err.Error() != tc.expectErr {
+				t.Fatalf("expected err\n%s\ngot\n%s", tc.expectErr, err.Error())
 			}
 		})
 	}
