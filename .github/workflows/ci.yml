@@ -51,7 +51,7 @@ jobs:
       - name: Add GOBIN to PATH
         run: echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
       - name: Install dependencies
-        run: go get golang.org/x/exp/cmd/apidiff
+        run: go install golang.org/x/exp/cmd/apidiff@latest
       - name: Checkout old code
         uses: actions/checkout@v2
         with:
