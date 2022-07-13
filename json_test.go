@@ -139,7 +139,11 @@ func TestUnmarshal(t *testing.T) {
 				t.Fatalf("expected %d strict errors, got %v", len(tc.expectStrictErrs), strictErrors)
 			}
 			for i := range tc.expectStrictErrs {
-				if !strings.Contains(strictErrors[i].Error(), tc.expectStrictErrs[i]) {
+				strictFieldErr, ok := strictErrors[i].(FieldError)
+				if !ok {
+					t.Fatalf("strict error does not implement FieldError: %v", strictErrors[i])
+				}
+				if !strings.Contains(strictFieldErr.Error(), tc.expectStrictErrs[i]) {
 					t.Fatalf("expected strict errors:\n  %s\ngot:\n  %v", strings.Join(tc.expectStrictErrs, "\n  "), strictErrors)
 				}
 			}
