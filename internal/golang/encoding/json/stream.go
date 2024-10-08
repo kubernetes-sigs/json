@@ -6,7 +6,6 @@ package json
 
 import (
 	"bytes"
-	"errors"
 	"io"
 )
 
@@ -253,6 +252,7 @@ func (enc *Encoder) SetEscapeHTML(on bool) {
 	enc.escapeHTML = on
 }
 
+/*
 // RawMessage is a raw encoded JSON value.
 // It implements [Marshaler] and [Unmarshaler] and can
 // be used to delay JSON decoding or precompute a JSON encoding.
@@ -274,10 +274,12 @@ func (m *RawMessage) UnmarshalJSON(data []byte) error {
 	*m = append((*m)[0:0], data...)
 	return nil
 }
+*/
 
 var _ Marshaler = (*RawMessage)(nil)
 var _ Unmarshaler = (*RawMessage)(nil)
 
+/*
 // A Token holds a value of one of these types:
 //
 //   - [Delim], for the four JSON delimiters [ ] { }
@@ -287,6 +289,7 @@ var _ Unmarshaler = (*RawMessage)(nil)
 //   - string, for JSON string literals
 //   - nil, for JSON null
 type Token any
+*/
 
 const (
 	tokenTopValue = iota
@@ -347,12 +350,14 @@ func (dec *Decoder) tokenValueEnd() {
 	}
 }
 
+/*
 // A Delim is a JSON array or object delimiter, one of [ ] { or }.
 type Delim rune
 
 func (d Delim) String() string {
 	return string(d)
 }
+*/
 
 // Token returns the next JSON token in the input stream.
 // At the end of the input stream, Token returns nil, [io.EOF].
