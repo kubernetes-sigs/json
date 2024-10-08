@@ -17,7 +17,6 @@ import (
 	"unicode"
 	"unicode/utf16"
 	"unicode/utf8"
-	_ "unsafe" // for linkname
 )
 
 // Unmarshal parses the JSON-encoded data and stores the result
@@ -94,11 +93,16 @@ import (
 // invalid UTF-16 surrogate pairs are not treated as an error.
 // Instead, they are replaced by the Unicode replacement
 // character U+FFFD.
-func Unmarshal(data []byte, v any) error {
+func Unmarshal(data []byte, v any, opts ...UnmarshalOpt) error {
 	// Check for well-formedness.
 	// Avoids filling out half a data structure
 	// before discovering a JSON syntax error.
 	var d decodeState
+
+	for _, opt := range opts {
+		opt(&d)
+	}
+
 	err := checkValid(data, &d.scan)
 	if err != nil {
 		return err
@@ -120,6 +124,7 @@ type Unmarshaler interface {
 	UnmarshalJSON([]byte) error
 }
 
+/*
 // An UnmarshalTypeError describes a JSON value that was
 // not appropriate for a value of a specific Go type.
 type UnmarshalTypeError struct {
@@ -167,6 +172,7 @@ func (e *InvalidUnmarshalError) Error() string {
 	}
 	return "json: Unmarshal(nil " + e.Type.String() + ")"
 }
+*/
 
 func (d *decodeState) unmarshal(v any) error {
 	rv := reflect.ValueOf(v)
@@ -182,9 +188,16 @@ func (d *decodeState) unmarshal(v any) error {
 	if err != nil {
 		return d.addErrorContext(err)
 	}
-	return d.savedError
+	if d.savedError != nil {
+		return d.savedError
+	}
+	if len(d.savedStrictErrors) > 0 {
+		return &UnmarshalStrictError{Errors: d.savedStrictErrors}
+	}
+	return nil
 }
 
+/*
 // A Number represents a JSON number literal.
 type Number string
 
@@ -200,6 +213,7 @@ func (n Number) Float64() (float64, error) {
 func (n Number) Int64() (int64, error) {
 	return strconv.ParseInt(string(n), 10, 64)
 }
+*/
 
 // An errorContext provides context for type errors during decoding.
 type errorContext struct {
@@ -217,6 +231,16 @@ type decodeState struct {
 	savedError            error
 	useNumber             bool
 	disallowUnknownFields bool
+
+	savedStrictErrors []error
+	seenStrictErrors  map[strictError]struct{}
+	strictFieldStack  []string
+
+	caseSensitive bool
+
+	preserveInts bool
+
+	disallowDuplicateFields bool
 }
 
 // readIndex returns the position of the last byte read.
@@ -238,6 +262,8 @@ func (d *decodeState) init(data []byte) *decodeState {
 		// Reuse the allocated space for the FieldStack slice.
 		d.errorContext.FieldStack = d.errorContext.FieldStack[:0]
 	}
+	// Reuse the allocated space for the strict FieldStack slice.
+	d.strictFieldStack = d.strictFieldStack[:0]
 	return d
 }
 
@@ -532,6 +558,12 @@ func (d *decodeState) array(v reflect.Value) error {
 		break
 	}
 
+	origStrictFieldStackLen := len(d.strictFieldStack)
+	defer func() {
+		// Reset to original length and reuse the allocated space for the strict FieldStack slice.
+		d.strictFieldStack = d.strictFieldStack[:origStrictFieldStackLen]
+	}()
+
 	i := 0
 	for {
 		// Look ahead for ] - can only happen on first iteration.
@@ -550,6 +582,7 @@ func (d *decodeState) array(v reflect.Value) error {
 			}
 		}
 
+		d.appendStrictFieldStackIndex(i)
 		if i < v.Len() {
 			// Decode into element.
 			if err := d.value(v.Index(i)); err != nil {
@@ -561,6 +594,8 @@ func (d *decodeState) array(v reflect.Value) error {
 				return err
 			}
 		}
+		// Reset to original length and reuse the allocated space for the strict FieldStack slice.
+		d.strictFieldStack = d.strictFieldStack[:origStrictFieldStackLen]
 		i++
 
 		// Next token must be , or ].
@@ -619,6 +654,7 @@ func (d *decodeState) object(v reflect.Value) error {
 	}
 
 	var fields structFields
+	var checkDuplicateField func(fieldNameIndex int, fieldName string)
 
 	// Check type of target:
 	//   struct or
@@ -642,8 +678,51 @@ func (d *decodeState) object(v reflect.Value) error {
 		if v.IsNil() {
 			v.Set(reflect.MakeMap(t))
 		}
+
+		if d.disallowDuplicateFields {
+			var seenKeys map[string]struct{}
+			checkDuplicateField = func(fieldNameIndex int, fieldName string) {
+				if seenKeys == nil {
+					seenKeys = map[string]struct{}{}
+				}
+				if _, seen := seenKeys[fieldName]; seen {
+					d.saveStrictError(d.newFieldError(duplicateStrictErrType, fieldName))
+				} else {
+					seenKeys[fieldName] = struct{}{}
+				}
+			}
+		}
+
 	case reflect.Struct:
 		fields = cachedTypeFields(t)
+
+		if d.disallowDuplicateFields {
+			if len(fields.list) <= 64 {
+				// bitset by field index for structs with <= 64 fields
+				var seenKeys uint64
+				checkDuplicateField = func(fieldNameIndex int, fieldName string) {
+					if seenKeys&(1<<fieldNameIndex) != 0 {
+						d.saveStrictError(d.newFieldError(duplicateStrictErrType, fieldName))
+					} else {
+						seenKeys = seenKeys | (1 << fieldNameIndex)
+					}
+				}
+			} else {
+				// list of seen field indices for structs with greater than 64 fields
+				var seenIndexes []bool
+				checkDuplicateField = func(fieldNameIndex int, fieldName string) {
+					if seenIndexes == nil {
+						seenIndexes = make([]bool, len(fields.list))
+					}
+					if seenIndexes[fieldNameIndex] {
+						d.saveStrictError(d.newFieldError(duplicateStrictErrType, fieldName))
+					} else {
+						seenIndexes[fieldNameIndex] = true
+					}
+				}
+			}
+		}
+
 		// ok
 	default:
 		d.saveError(&UnmarshalTypeError{Value: "object", Type: t, Offset: int64(d.off)})
@@ -656,6 +735,7 @@ func (d *decodeState) object(v reflect.Value) error {
 	if d.errorContext != nil {
 		origErrorContext = *d.errorContext
 	}
+	origStrictFieldStackLen := len(d.strictFieldStack)
 
 	for {
 		// Read opening " of string key or closing }.
@@ -689,12 +769,19 @@ func (d *decodeState) object(v reflect.Value) error {
 				mapElem.SetZero()
 			}
 			subv = mapElem
+			if checkDuplicateField != nil {
+				checkDuplicateField(0, string(key))
+			}
+			d.appendStrictFieldStackKey(string(key))
 		} else {
 			f := fields.byExactName[string(key)]
-			if f == nil {
+			if f == nil && !d.caseSensitive {
 				f = fields.byFoldedName[string(foldName(key))]
 			}
 			if f != nil {
+				if checkDuplicateField != nil {
+					checkDuplicateField(f.listIndex, f.name)
+				}
 				subv = v
 				destring = f.quoted
 				for _, i := range f.index {
@@ -724,8 +811,9 @@ func (d *decodeState) object(v reflect.Value) error {
 				}
 				d.errorContext.FieldStack = append(d.errorContext.FieldStack, f.name)
 				d.errorContext.Struct = t
+				d.appendStrictFieldStackKey(f.name)
 			} else if d.disallowUnknownFields {
-				d.saveError(fmt.Errorf("json: unknown field %q", key))
+				d.saveStrictError(d.newFieldError(unknownStrictErrType, string(key)))
 			}
 		}
 
@@ -811,6 +899,8 @@ func (d *decodeState) object(v reflect.Value) error {
 			d.errorContext.FieldStack = d.errorContext.FieldStack[:len(origErrorContext.FieldStack)]
 			d.errorContext.Struct = origErrorContext.Struct
 		}
+		// Reset to original length and reuse the allocated space for the strict FieldStack slice.
+		d.strictFieldStack = d.strictFieldStack[:origStrictFieldStackLen]
 		if d.opcode == scanEndObject {
 			break
 		}
@@ -827,6 +917,15 @@ func (d *decodeState) convertNumber(s string) (any, error) {
 	if d.useNumber {
 		return Number(s), nil
 	}
+
+	// if the string contains no floating point, return it as an int64 if it decodes successfully and does not overflow.
+	// otherwise, fall back to float64 behavior.
+	if d.preserveInts && !strings.Contains(s, ".") {
+		if i, err := strconv.ParseInt(s, 10, 64); err == nil {
+			return i, nil
+		}
+	}
+
 	f, err := strconv.ParseFloat(s, 64)
 	if err != nil {
 		return nil, &UnmarshalTypeError{Value: "number " + s, Type: reflect.TypeFor[float64](), Offset: int64(d.off)}
@@ -1038,6 +1137,12 @@ func (d *decodeState) valueInterface() (val any) {
 
 // arrayInterface is like array but returns []interface{}.
 func (d *decodeState) arrayInterface() []any {
+	origStrictFieldStackLen := len(d.strictFieldStack)
+	defer func() {
+		// Reset to original length and reuse the allocated space for the strict FieldStack slice.
+		d.strictFieldStack = d.strictFieldStack[:origStrictFieldStackLen]
+	}()
+
 	var v = make([]any, 0)
 	for {
 		// Look ahead for ] - can only happen on first iteration.
@@ -1046,7 +1151,10 @@ func (d *decodeState) arrayInterface() []any {
 			break
 		}
 
+		d.appendStrictFieldStackIndex(len(v))
 		v = append(v, d.valueInterface())
+		// Reset to original length and reuse the allocated space for the strict FieldStack slice.
+		d.strictFieldStack = d.strictFieldStack[:origStrictFieldStackLen]
 
 		// Next token must be , or ].
 		if d.opcode == scanSkipSpace {
@@ -1064,6 +1172,12 @@ func (d *decodeState) arrayInterface() []any {
 
 // objectInterface is like object but returns map[string]interface{}.
 func (d *decodeState) objectInterface() map[string]any {
+	origStrictFieldStackLen := len(d.strictFieldStack)
+	defer func() {
+		// Reset to original length and reuse the allocated space for the strict FieldStack slice.
+		d.strictFieldStack = d.strictFieldStack[:origStrictFieldStackLen]
+	}()
+
 	m := make(map[string]any)
 	for {
 		// Read opening " of string key or closing }.
@@ -1094,8 +1208,17 @@ func (d *decodeState) objectInterface() map[string]any {
 		}
 		d.scanWhile(scanSkipSpace)
 
+		if d.disallowDuplicateFields {
+			if _, exists := m[key]; exists {
+				d.saveStrictError(d.newFieldError(duplicateStrictErrType, key))
+			}
+		}
+
 		// Read value.
+		d.appendStrictFieldStackKey(key)
 		m[key] = d.valueInterface()
+		// Reset to original length and reuse the allocated space for the strict FieldStack slice.
+		d.strictFieldStack = d.strictFieldStack[:origStrictFieldStackLen]
 
 		// Next token must be , or }.
 		if d.opcode == scanSkipSpace {
@@ -1178,15 +1301,6 @@ func unquote(s []byte) (t string, ok bool) {
 	return
 }
 
-// unquoteBytes should be an internal detail,
-// but widely used packages access it using linkname.
-// Notable members of the hall of shame include:
-//   - github.com/bytedance/sonic
-//
-// Do not remove or change the type signature.
-// See go.dev/issue/67401.
-//
-//go:linkname unquoteBytes
 func unquoteBytes(s []byte) (t []byte, ok bool) {
 	if len(s) < 2 || s[0] != '"' || s[len(s)-1] != '"' {
 		return

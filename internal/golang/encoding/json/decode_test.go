@@ -946,7 +946,7 @@ var unmarshalTests = []struct {
 			"Q": 18
 		}`,
 		ptr:                   new(Top),
-		err:                   fmt.Errorf("json: unknown field \"extra\""),
+		err:                   fmt.Errorf("json: unknown field \"e.extra\""),
 		disallowUnknownFields: true,
 	},
 	// issue 26444
