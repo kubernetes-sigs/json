@@ -10,16 +10,19 @@ jobs:
 
   ci:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go: [ '', '1.x' ] # '' uses go.mod, 1.x uses latest go
     steps:
     - uses: actions/checkout@v2
       with:
-        path: src/sigs.k8s.io/json/        
+        path: src/sigs.k8s.io/json/
 
     - name: Set up Go
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@v3
       with:
-        go-version: "1.x"
-        stable: true
+        go-version-file: 'src/sigs.k8s.io/json/go.mod'
+        go-version: ${{ matrix.go }}
         check-latest: true
 
     - name: Test
@@ -44,14 +47,6 @@ jobs:
     runs-on: ubuntu-latest
     if: github.base_ref
     steps:
-      - name: Install Go
-        uses: actions/setup-go@v2
-        with:
-          go-version: '1.x'
-      - name: Add GOBIN to PATH
-        run: echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
-      - name: Install dependencies
-        run: go install golang.org/x/exp/cmd/apidiff@latest
       - name: Checkout old code
         uses: actions/checkout@v2
         with:
@@ -61,6 +56,14 @@ jobs:
         uses: actions/checkout@v2
         with:
           path: "new"
+      - name: Install Go
+        uses: actions/setup-go@v3
+        with:
+          go-version-file: 'new/go.mod'
+      - name: Add GOBIN to PATH
+        run: echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+      - name: Install dependencies
+        run: go install golang.org/x/exp/cmd/apidiff@latest
       - name: APIDiff
         run: ./hack/verify-apidiff.sh -d ../old
         working-directory: "new"
