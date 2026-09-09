@@ -14,12 +14,12 @@ jobs:
       matrix:
         go: [ '', '1.x' ] # '' uses go.mod, 1.x uses latest go
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@0717577d45739eb3c851188b29f50ed6c0b2194e # v2
       with:
         path: src/sigs.k8s.io/json/
 
     - name: Set up Go
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@be3c94b385c4f180051c996d336f57a34c397495 # v3.6.1
       with:
         go-version-file: 'src/sigs.k8s.io/json/go.mod'
         go-version: ${{ matrix.go }}
@@ -48,16 +48,16 @@ jobs:
     if: github.base_ref
     steps:
       - name: Checkout old code
-        uses: actions/checkout@v2
+        uses: actions/checkout@0717577d45739eb3c851188b29f50ed6c0b2194e # v2.8.0
         with:
           ref: ${{ github.base_ref }}
           path: "old"
       - name: Checkout new code
-        uses: actions/checkout@v2
+        uses: actions/checkout@0717577d45739eb3c851188b29f50ed6c0b2194e # v2.8.0
         with:
           path: "new"
       - name: Install Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@be3c94b385c4f180051c996d336f57a34c397495 # v3.6.1
         with:
           go-version-file: 'new/go.mod'
       - name: Add GOBIN to PATH
